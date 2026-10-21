@@ -1,0 +1,37 @@
+# 构建产物
+BtBeam.exe
+*.exe
+*.pdb
+*.obj
+
+# 备份
+*.bak
+*.bak[0-9]*
+*.bak-*
+*.orig
+*.rej
+
+# 运行期
+btbeam.ini
+btbeam.log
+*.log
+
+# 远程控制工具（不对外）
+peer/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# 临时
+tmp/
+temp/
+*.tmp
+*.pid
+
+# IDE
+.vs/
+.vscode/
+*.user
+*.suo
