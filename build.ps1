@@ -38,7 +38,7 @@ $argList = @(
     '/r:System.Core.dll',
     '/r:System.Windows.Forms.dll',
     '/r:System.Drawing.dll',
-    'BtBeam.cs'
+    'BtBeam.cs.full'   # 完整实现（不入库）
 )
 
 # 先杀掉运行中的实例（否则文件被占用）

@@ -1,4 +1,4 @@
-# 构建产物
+﻿# 构建产物
 BtBeam.exe
 *.exe
 *.pdb
@@ -15,6 +15,9 @@ BtBeam.exe
 btbeam.ini
 btbeam.log
 *.log
+
+# 完整实现（半开源：仓库只放删减版 BtBeam.cs）
+BtBeam.cs.full
 
 # 远程控制工具（不对外）
 peer/

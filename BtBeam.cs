@@ -1,4 +1,23 @@
-﻿// BtBeam.cs — 蓝牙点对点文件传输（托盘常驻版）
+﻿// ============================================================================
+//  BtBeam —— 半开源版本
+//
+//  开源部分：
+//    · UI 层（PopupForm / ToastForm / FloatingBall / 托盘图标与菜单）
+//    · 配置读写、蓝牙设备枚举、Win32 P/Invoke 声明
+//    · 蓝牙协议与热点传输的 方法签名 / 常量 / 全部注释
+//
+//  未包含实现（方法体为 throw NotImplementedException）：
+//    Link      蓝牙 RFCOMM：握手、角色协商、命令通道、文件收发
+//    Hotspot   移动热点封装（NetworkOperatorTetheringManager）
+//    Traffic   本机 Wi-Fi 实时流量采样
+//    Wifi      Wi-Fi 连接、地址获取、profile 管理
+//    Hotlink   热点通道 TCP 传输（LBBT1 协议）
+//
+//  完整功能请使用发行版： https://mosink.top/workshop/
+//  授权：仅限个人非商业使用，详见 LICENSE
+// ============================================================================
+
+// BtBeam.cs — 蓝牙点对点文件传输（托盘常驻版）
 // 编译：
 //   csc /nologo /target:winexe /optimize+ /out:BtBeam.exe ^
 //       /r:System.Windows.Forms.dll /r:System.Drawing.dll BtBeam.cs
@@ -736,45 +755,9 @@ namespace BtBeam
         /// RFCOMM channel 会先让 connect 成功、随后再 RST。
         public static bool Ping(ulong addr, int channel, int maxTries, int timeoutMs)
         {
-            Wsa.Ensure();
-            int tried = 0;
-            foreach (int ch in ChannelOrder(channel))
-            {
-                if (ShouldCancel != null && ShouldCancel())
-                {
-                    Sys.Diag("Ping: cancelled");
-                    return false;
-                }
-                if (tried >= maxTries) break;
-                tried++;
-                IntPtr s = Wsa.socket(Wsa.AF_BTH, Wsa.SOCK_STREAM, Wsa.BTPROTO_RFCOMM);
-                if (s.ToInt64() == -1) continue;
-                try
-                {
-                    Wsa.SOCKADDR_BTH a = new Wsa.SOCKADDR_BTH();
-                    a.addressFamily = Wsa.AF_BTH;
-                    a.btAddr = addr;
-                    a.port = (uint)ch;
-                    if (!Wsa.ConnectWithTimeout(s, ref a, timeoutMs)) continue;
-
-                    // 必须等回包：PING -> PONG
-                    Wsa.SetRecvTimeout(s, timeoutMs);
-                    byte[] q = Encoding.UTF8.GetBytes("PING\n");
-                    Wsa.SendAll(s, q, 0, q.Length);
-                    string reply = Wsa.ReadLine(s);
-                    if (reply != null && reply.Trim() == "PONG")
-                    {
-                        Sys.Diag("ping: reachable on ch=" + ch + " (PONG)");
-                        return true;
-                    }
-                    Sys.Diag("ping: ch=" + ch + " no PONG, reply=[" + (reply == null ? "null" : reply) + "]");
-                }
-                catch { }
-                finally { try { Wsa.closesocket(s); } catch { } }
-                Thread.Sleep(500);
-            }
-            Sys.Diag("ping: unreachable after " + tried + " tries");
-            return false;
+            // 核心实现未包含在开源部分。
+            // 完整逻辑见发行版 BtBeam.exe；此处保留签名以说明架构与协议约定。
+            throw new NotImplementedException("core implementation not included in the open-source part");
         }
 
         /// 通用命令通道：发一行、收一行（HOSTING 等控制命令用）
@@ -782,131 +765,25 @@ namespace BtBeam
         public static string SendCommand(ulong addr, int channel, string command,
                                          int connectTimeoutMs, int replyTimeoutMs)
         {
-            Wsa.Ensure();
-            DateTime deadline = DateTime.UtcNow.AddMilliseconds(connectTimeoutMs * 5 + replyTimeoutMs + 1000);
-            foreach (int ch in ChannelOrder(channel))
-            {
-                if (ShouldCancel != null && ShouldCancel())
-                {
-                    Sys.Diag("SendCommand: cancelled at ch=" + ch);
-                    return null;
-                }
-                if (DateTime.UtcNow > deadline) break;      // 总时长兜底
-                IntPtr s = Wsa.socket(Wsa.AF_BTH, Wsa.SOCK_STREAM, Wsa.BTPROTO_RFCOMM);
-                if (s.ToInt64() == -1) continue;
-                try
-                {
-                    Wsa.SOCKADDR_BTH a = new Wsa.SOCKADDR_BTH();
-                    a.addressFamily = Wsa.AF_BTH;
-                    a.btAddr = addr;
-                    a.port = (uint)ch;
-                    if (!Wsa.ConnectWithTimeout(s, ref a, connectTimeoutMs)) continue;
-
-                    Wsa.SetRecvTimeout(s, replyTimeoutMs);
-                    byte[] q = Encoding.UTF8.GetBytes(command + "\n");
-                    Wsa.SendAll(s, q, 0, q.Length);
-                    string reply = Wsa.ReadLine(s);
-                    if (!string.IsNullOrEmpty(reply))
-                    {
-                        LastConnectedChannel = ch;
-                        return reply;
-                    }
-                }
-                catch { }
-                finally { try { Wsa.closesocket(s); } catch { } }
-
-                // 连失败后必须给蓝牙栈时间清理那次未完成的寻呼。
-                // 否则紧接着 connect 下一个 channel 会排队等链路空闲，一律超时。
-                Thread.Sleep(700);
-            }
-            return null;
+            // 核心实现未包含在开源部分。
+            // 完整逻辑见发行版 BtBeam.exe；此处保留签名以说明架构与协议约定。
+            throw new NotImplementedException("core implementation not included in the open-source part");
         }
 
         /// 通过蓝牙问对端支持哪些通道，返回对端的 CAP 字符串（失败返回 null）
         /// 通过蓝牙请求对端开热点，返回 "READY ssid,pass,ip" 或 null（超时 40 秒，对方要开机热点）
         public static string PreparePeer(ulong addr, int channel, int timeoutMs)
         {
-            Wsa.Ensure();
-            const int ConnectTimeoutMs = 1500;   // 实测 157ms 即可连上，留 10 倍余量（也让"停止"更快生效）
-            const int MaxChannels = 4;
-            int tried = 0;
-            DateTime deadline = DateTime.UtcNow.AddMilliseconds(timeoutMs + 8000);
-            foreach (int ch in ChannelOrder(channel))
-            {
-                if (ShouldCancel != null && ShouldCancel())
-                {
-                    Sys.Diag("PreparePeer: cancelled");
-                    return null;
-                }
-                if (tried >= MaxChannels) break;
-                if (DateTime.UtcNow > deadline) break;
-                tried++;
-
-                IntPtr s = Wsa.socket(Wsa.AF_BTH, Wsa.SOCK_STREAM, Wsa.BTPROTO_RFCOMM);
-                if (s.ToInt64() == -1) continue;
-                try
-                {
-                    Wsa.SOCKADDR_BTH a = new Wsa.SOCKADDR_BTH();
-                    a.addressFamily = Wsa.AF_BTH;
-                    a.btAddr = addr;
-                    a.port = (uint)ch;
-
-                    if (!Wsa.ConnectWithTimeout(s, ref a, ConnectTimeoutMs))
-                    {
-                        Sys.Diag("  prep ch=" + ch + " connect fail");
-                        continue;
-                    }
-
-                    Sys.Diag("  prep ch=" + ch + " connected, sending PREPARE");
-                    Wsa.SetRecvTimeout(s, timeoutMs);
-                    byte[] q = Encoding.UTF8.GetBytes("PREPARE\n");
-                    Wsa.SendAll(s, q, 0, q.Length);
-                    string reply = Wsa.ReadLine(s);
-                    if (!string.IsNullOrEmpty(reply))
-                    {
-                        LastConnectedChannel = ch;
-                        Sys.Diag("  prep ch=" + ch + " reply: " + reply);
-                        return reply;
-                    }
-                    Sys.Diag("  prep ch=" + ch + " connected but no reply");
-                    return "ERR noresponse";
-                }
-                catch (Exception ex) { Sys.Diag("  prep ch=" + ch + " ex: " + ex.Message); }
-                finally { try { Wsa.closesocket(s); } catch { } }
-            }
-            Sys.Diag("  prep: tried " + tried + " channels, all failed");
-            return "ERR unreachable";
+            // 核心实现未包含在开源部分。
+            // 完整逻辑见发行版 BtBeam.exe；此处保留签名以说明架构与协议约定。
+            throw new NotImplementedException("core implementation not included in the open-source part");
         }
 
         public static string QueryCapability(ulong addr, int channel)
         {
-            Wsa.Ensure();
-            foreach (int ch in ChannelOrder(channel))
-            {
-                IntPtr s = Wsa.socket(Wsa.AF_BTH, Wsa.SOCK_STREAM, Wsa.BTPROTO_RFCOMM);
-                if (s.ToInt64() == -1) return null;
-                try
-                {
-                    Wsa.SOCKADDR_BTH a = new Wsa.SOCKADDR_BTH();
-                    a.addressFamily = Wsa.AF_BTH;
-                    a.btAddr = addr;
-                    a.port = (uint)ch;
-                    if (Wsa.connect(s, ref a, Marshal.SizeOf(typeof(Wsa.SOCKADDR_BTH))) != 0) continue;
-
-                    Wsa.SetRecvTimeout(s, 8000);
-                    byte[] q = Encoding.UTF8.GetBytes("QUERY\n");
-                    Wsa.SendAll(s, q, 0, q.Length);
-                    string reply = Wsa.ReadLine(s);
-                    if (!string.IsNullOrEmpty(reply))
-                    {
-                        LastConnectedChannel = ch;
-                        return reply;
-                    }
-                }
-                catch { }
-                finally { try { Wsa.closesocket(s); } catch { } }
-            }
-            return null;
+            // 核心实现未包含在开源部分。
+            // 完整逻辑见发行版 BtBeam.exe；此处保留签名以说明架构与协议约定。
+            throw new NotImplementedException("core implementation not included in the open-source part");
         }
 
         /// 从 CAP 字符串里取字段值
@@ -934,260 +811,17 @@ namespace BtBeam
 
         public static void SendFile(ulong addr, int channel, string path, Action<long, long> progress)
         {
-            if (LastConnectedChannel > 0) channel = LastConnectedChannel;
-            Wsa.Ensure();
-            IntPtr s = Wsa.socket(Wsa.AF_BTH, Wsa.SOCK_STREAM, Wsa.BTPROTO_RFCOMM);
-            if (s.ToInt64() == -1) throw new Exception(Wsa.WsaText(Wsa.WSAGetLastError()));
-            try
-            {
-                Wsa.SOCKADDR_BTH a = new Wsa.SOCKADDR_BTH();
-                a.addressFamily = Wsa.AF_BTH;
-                a.btAddr = addr;
-                a.port = (uint)channel;
-                if (Wsa.connect(s, ref a, Marshal.SizeOf(typeof(Wsa.SOCKADDR_BTH))) != 0)
-                    throw new Exception(Wsa.WsaText(Wsa.WSAGetLastError()));
-
-                FileInfo fi = new FileInfo(path);
-                string name = fi.Name.Replace("\\", "\\\\").Replace("\"", "\\\"");
-                string head = HS + "{\"name\":\"" + name + "\",\"size\":" + fi.Length + "}\n";
-                byte[] hb = Encoding.UTF8.GetBytes(head);
-                Wsa.SendAll(s, hb, 0, hb.Length);
-
-                string ack = Wsa.ReadLine(s);
-                if (ack == null) throw new Exception("对端已断开连接");
-                if (ack.Trim() != "OK") throw new Exception("对方拒绝：" + ack.Trim());
-
-                using (FileStream fs = File.OpenRead(path))
-                {
-                    byte[] buf = new byte[65536];
-                    long total = 0;
-                    int n;
-                    while ((n = fs.Read(buf, 0, buf.Length)) > 0)
-                    {
-                        Wsa.SendAll(s, buf, 0, n);
-                        total += n;
-                        if (progress != null) progress(total, fi.Length);
-                    }
-                }
-                Wsa.ReadLine(s);
-            }
-            finally { Wsa.closesocket(s); }
+            // 核心实现未包含在开源部分。
+            // 完整逻辑见发行版 BtBeam.exe；此处保留签名以说明架构与协议约定。
+            throw new NotImplementedException("core implementation not included in the open-source part");
         }
 
         public static void Serve(int channel, string outDir, bool[] running,
                                  Action<string> log, Action<string> onFile, Action<long, long> progress)
         {
-            Wsa.Ensure();
-            // 1-3 被系统 SDP/SPP 占用；从 4 起逐个尝试直到绑定成功
-            int bound = 0;
-            IntPtr srv = IntPtr.Zero;
-            string lastErr = "no free channel";
-            foreach (int ch in ChannelOrder(channel))
-            {
-                if (srv != IntPtr.Zero && srv.ToInt64() != -1) { try { Wsa.closesocket(srv); } catch { } }
-                srv = Wsa.socket(Wsa.AF_BTH, Wsa.SOCK_STREAM, Wsa.BTPROTO_RFCOMM);
-                if (srv.ToInt64() == -1) { lastErr = Wsa.WsaText(Wsa.WSAGetLastError()); continue; }
-                Wsa.SOCKADDR_BTH a0 = new Wsa.SOCKADDR_BTH();
-                a0.addressFamily = Wsa.AF_BTH;
-                a0.btAddr = 0;
-                a0.port = (uint)ch;
-                if (Wsa.bind(srv, ref a0, Marshal.SizeOf(typeof(Wsa.SOCKADDR_BTH))) != 0)
-                { lastErr = "ch=" + ch + " " + Wsa.WsaText(Wsa.WSAGetLastError()); continue; }
-                if (Wsa.listen(srv, 4) != 0)
-                { lastErr = "ch=" + ch + " " + Wsa.WsaText(Wsa.WSAGetLastError()); continue; }
-                bound = ch;
-                break;
-            }
-            if (bound == 0) throw new Exception("listen failed: " + lastErr);
-            ActiveChannel = bound;
-            try
-            {
-
-                log("已就绪，channel " + bound);
-
-                while (running[0])
-                {
-                    Wsa.SOCKADDR_BTH peer = new Wsa.SOCKADDR_BTH();
-                    int plen = Marshal.SizeOf(typeof(Wsa.SOCKADDR_BTH));
-                    IntPtr c = Wsa.accept(srv, ref peer, ref plen);
-                    if (c.ToInt64() == -1)
-                    {
-                        if (!running[0]) break;
-                        continue;
-                    }
-                    try
-                    {
-                        Wsa.SetRecvTimeout(c, 8000);   // 防止客户端连上不说话把 Serve 卡死
-                        string line = Wsa.ReadLine(c);
-                        if (line == null) continue;         // 连接关闭 -> 只结束本次连接，不退出 Serve
-                        if (line.Length == 0) continue;     // 空行 -> 继续读
-
-                        // 存活探测：必须回 PONG，否则发送端会误判"对端在"
-                        if (line == "PING")
-                        {
-                            byte[] pong = Encoding.UTF8.GetBytes("PONG\n");
-                            Wsa.SendAll(c, pong, 0, pong.Length);
-                            continue;
-                        }
-                        // 控制命令优先处理（它们不以 LBBT1 开头）
-                        // 对端要求我们开热点，回复 READY ssid,pass,ip
-                        if (line == "PREPARE")
-                        {
-                            string info = null;
-                            try { if (HotspotStarter != null) info = HotspotStarter(); } catch { }
-                            string reply = string.IsNullOrEmpty(info) ? "ERR hotspot" : ("READY " + info);
-                            byte[] pb = Encoding.UTF8.GetBytes(reply + "\n");
-                            Wsa.SendAll(c, pb, 0, pb.Length);
-                            continue;
-                        }
-
-                        if (line == "QUERY")
-                        {
-                            string cap = CapabilityProvider != null ? CapabilityProvider() : "CAP {\"bt\":1,\"wfd\":0}";
-                            byte[] cb = Encoding.UTF8.GetBytes(cap + "\n");
-                            Wsa.SendAll(c, cb, 0, cb.Length);
-                            continue;
-                        }
-
-                        // 反向托管：对方忙，由它开热点，我去连，然后回报自己的地址
-                        if (line.StartsWith("HOSTING "))
-                        {
-                            string hinfo = line.Substring(8).Trim();
-                            string[] hp = hinfo.Split(',');
-                            string hreply;
-
-                            // 死锁守卫：我自己就是热点主机（有客户端连着）时，
-                            // 绝不能去连对方的热点 —— 那样本机热点会被关掉，
-                            // 连着的客户端全部掉线。直接告诉对方我的地址，让它发过来。
-                            int myClients = 0;
-                            try { myClients = Hotspot.ClientCount; } catch { }
-                            if (myClients > 0)
-                            {
-                                // 我是热点主机：不能去连对方（会关掉自己的热点）。
-                                // 也绝不能回 MY_IP —— 两端热点地址都是 192.168.137.1，
-                                // 对方会把它当成自己的地址，把文件发给自己。
-                                // 正确做法：回 READY，让对方来连我的热点。
-                                string mySsid = "";
-                                string myPass = "";
-                                try { mySsid = Hotspot.Ssid; } catch { }
-                                try { myPass = Hotspot.Pass; } catch { }
-                                if (string.IsNullOrEmpty(mySsid)) mySsid = "PeerLink";
-                                if (string.IsNullOrEmpty(myPass)) myPass = "peerlink2026";
-
-                                hreply = "READY " + mySsid + "," + myPass + "," + Hotspot.HostIp();
-                                log("HOSTING 改判：我是热点主机(clients=" + myClients
-                                    + ")，让对方连我 -> " + mySsid);
-                                byte[] rb0 = Encoding.UTF8.GetBytes(hreply + "\n");
-                                Wsa.SendAll(c, rb0, 0, rb0.Length);
-                                continue;
-                            }
-
-                            if (hp.Length >= 3)
-                            {
-                                bool joined = false;
-                                try { joined = Wifi.Connect(hp[0], hp[1], 30, delegate (string s) { log(s); }); }
-                                catch (Exception ex) { log("接入失败: " + ex.Message); }
-
-                                string myIp = joined ? Wifi.GetHotspotIp() : null;
-                                LastPeerIp = myIp;
-                                hreply = (myIp != null) ? ("MY_IP " + myIp) : "MY_IP FAIL";
-                            }
-                            else { hreply = "MY_IP FAIL"; }
-
-                            byte[] rb = Encoding.UTF8.GetBytes(hreply + "\n");
-                            Wsa.SendAll(c, rb, 0, rb.Length);
-                            continue;
-                        }
-
-                        // 流量查询：对端想知道我这边有多忙，用来决定谁断网
-                        if (line == "TRAFFIC")
-                        {
-                            double rate = 0;
-                            try { rate = Traffic.RateKBps(); } catch { }
-                            string tr = "RATE " + ((int)rate);
-                            byte[] tb = Encoding.UTF8.GetBytes(tr + "\n");
-                            Wsa.SendAll(c, tb, 0, tb.Length);
-                            Sys.Diag("traffic reply: " + tr);
-                            continue;
-                        }
-
-                        // 控制命令处理完了，剩下的才按文件协议校验
-                        if (!line.StartsWith(HS)) continue;
-
-                        string json = line.Substring(HS.Length);
-
-                        // 用正则解析，兼容有/无空格的 JSON（Python json.dumps 默认带空格）
-                        System.Text.RegularExpressions.Match mm =
-                            System.Text.RegularExpressions.Regex.Match(json,
-                                "\"name\"\\s*:\\s*\"((?:[^\"\\\\]|\\\\.)*)\"\\s*,\\s*\"size\"\\s*:\\s*(\\d+)");
-                        if (!mm.Success) { log("头部格式不符：" + line.Substring(0, Math.Min(60, line.Length))); continue; }
-
-                        string fname = mm.Groups[1].Value;
-
-                        // 先解 JSON 的 \uXXXX 转义（Python json.dumps 默认会把中文转义）
-                        if (fname.IndexOf("\\u") >= 0)
-                        {
-                            fname = System.Text.RegularExpressions.Regex.Replace(fname, "\\\\u([0-9a-fA-F]{4})",
-                                new System.Text.RegularExpressions.MatchEvaluator(delegate (System.Text.RegularExpressions.Match m2)
-                                {
-                                    return ((char)Convert.ToInt32(m2.Groups[1].Value, 16)).ToString();
-                                }));
-                        }
-                        // 再解 \\ 和 \"
-                        fname = fname.Replace("\\\\", "\\").Replace("\\\"", "\"");
-                        // 最后才取文件名，避免 \uXXXX 中的反斜杠被当路径分隔符
-                        fname = Path.GetFileName(fname);
-                        if (string.IsNullOrEmpty(fname)) fname = "unnamed.bin";
-                        long size = long.Parse(mm.Groups[2].Value);
-
-                        if (!Directory.Exists(outDir)) Directory.CreateDirectory(outDir);
-                        string dest = Path.Combine(outDir, fname);
-                        if (File.Exists(dest))
-                        {
-                            string stem = Path.GetFileNameWithoutExtension(fname);
-                            string ext = Path.GetExtension(fname);
-                            for (int i = 1; i < 9999; i++)
-                            {
-                                dest = Path.Combine(outDir, stem + " (" + i + ")" + ext);
-                                if (!File.Exists(dest)) break;
-                            }
-                        }
-
-                        byte[] okb = Encoding.UTF8.GetBytes("OK\n");
-                        Wsa.SendAll(c, okb, 0, okb.Length);
-
-                        long got = 0;
-                        byte[] buf = new byte[65536];
-                        using (FileStream fs = new FileStream(dest + ".part", FileMode.Create))
-                        {
-                            while (got < size)
-                            {
-                                int want = (int)Math.Min((long)buf.Length, size - got);
-                                int n = Wsa.recv(c, buf, want, 0);
-                                if (n <= 0) break;
-                                fs.Write(buf, 0, n);
-                                got += n;
-                                if (progress != null) progress(got, size);
-                            }
-                        }
-                        if (got == size)
-                        {
-                            File.Move(dest + ".part", dest);
-                            byte[] db = Encoding.UTF8.GetBytes("DONE " + Path.GetFileName(dest) + "\n");
-                            Wsa.SendAll(c, db, 0, db.Length);
-                            if (onFile != null) onFile(dest);
-                            log("收到 " + Path.GetFileName(dest));
-                        }
-                        else
-                        {
-                            log("不完整，已保留 .part");
-                        }
-                    }
-                    catch (Exception ex) { log("传输中断：" + ex.Message); }
-                    finally { Wsa.closesocket(c); }
-                }
-            }
-            finally { Wsa.closesocket(srv); }
+            // 核心实现未包含在开源部分。
+            // 完整逻辑见发行版 BtBeam.exe；此处保留签名以说明架构与协议约定。
+            throw new NotImplementedException("core implementation not included in the open-source part");
         }
     }
 
@@ -1201,12 +835,9 @@ namespace BtBeam
 
         static Windows.Networking.NetworkOperators.NetworkOperatorTetheringManager Mgr()
         {
-            if (_mgr != null) return _mgr;
-            Windows.Networking.Connectivity.ConnectionProfile cp =
-                Windows.Networking.Connectivity.NetworkInformation.GetInternetConnectionProfile();
-            if (cp == null) throw new Exception("当前没有 Internet 连接，无法创建热点");
-            _mgr = Windows.Networking.NetworkOperators.NetworkOperatorTetheringManager.CreateFromConnectionProfile(cp);
-            return _mgr;
+            // 核心实现未包含在开源部分。
+            // 完整逻辑见发行版 BtBeam.exe；此处保留签名以说明架构与协议约定。
+            throw new NotImplementedException("core implementation not included in the open-source part");
         }
 
         public static bool IsOn
@@ -1232,53 +863,18 @@ namespace BtBeam
         /// 热点网段的本地地址（Windows 默认 192.168.137.1）
         public static string HostIp()
         {
-            try
-            {
-                foreach (System.Net.NetworkInformation.NetworkInterface ni
-                         in System.Net.NetworkInformation.NetworkInterface.GetAllNetworkInterfaces())
-                {
-                    if (ni.OperationalStatus != System.Net.NetworkInformation.OperationalStatus.Up) continue;
-                    foreach (System.Net.NetworkInformation.UnicastIPAddressInformation ua
-                             in ni.GetIPProperties().UnicastAddresses)
-                    {
-                        if (ua.Address.AddressFamily != System.Net.Sockets.AddressFamily.InterNetwork) continue;
-                        string s = ua.Address.ToString();
-                        if (s.StartsWith("192.168.137.")) return s;
-                    }
-                }
-            }
-            catch { }
-            return "192.168.137.1";
+            // 核心实现未包含在开源部分。
+            // 完整逻辑见发行版 BtBeam.exe；此处保留签名以说明架构与协议约定。
+            throw new NotImplementedException("core implementation not included in the open-source part");
         }
 
         /// 关键顺序：若已开启先关闭 -> 配置 SSID -> 启动
         /// （顺序错了会把 ICS 服务 ipnathlp.dll 打死）
         public static void Start(string ssid, string pass)
         {
-            Windows.Networking.NetworkOperators.NetworkOperatorTetheringManager m = Mgr();
-
-            if (m.TetheringOperationalState.ToString() == "On")
-            {
-                try { m.StopTetheringAsync().AsTask().Wait(20000); }
-                catch { }
-                Thread.Sleep(2000);
-            }
-
-            Windows.Networking.NetworkOperators.NetworkOperatorTetheringAccessPointConfiguration cfg =
-                new Windows.Networking.NetworkOperators.NetworkOperatorTetheringAccessPointConfiguration();
-            cfg.Ssid = ssid;
-            cfg.Passphrase = pass;
-            if (!m.ConfigureAccessPointAsync(cfg).AsTask().Wait(15000))
-                throw new Exception("配置 SSID 超时");
-            Thread.Sleep(800);
-
-            System.Threading.Tasks.Task<Windows.Networking.NetworkOperators.NetworkOperatorTetheringOperationResult> t =
-                System.WindowsRuntimeSystemExtensions.AsTask(m.StartTetheringAsync());
-            if (!t.Wait(30000)) throw new Exception("启动热点超时");
-            if (t.Result.Status.ToString() != "Success")
-                throw new Exception("启动失败: " + t.Result.Status);
-
-            Thread.Sleep(2500);
+            // 核心实现未包含在开源部分。
+            // 完整逻辑见发行版 BtBeam.exe；此处保留签名以说明架构与协议约定。
+            throw new NotImplementedException("core implementation not included in the open-source part");
         }
 
         public static void Stop()
@@ -1306,41 +902,17 @@ namespace BtBeam
 
         public static double RateKBps()
         {
-            long rx = 0, tx = 0;
-            try
-            {
-                foreach (System.Net.NetworkInformation.NetworkInterface ni
-                         in System.Net.NetworkInformation.NetworkInterface.GetAllNetworkInterfaces())
-                {
-                    if (ni.NetworkInterfaceType != System.Net.NetworkInformation.NetworkInterfaceType.Wireless80211) continue;
-                    if (ni.OperationalStatus != System.Net.NetworkInformation.OperationalStatus.Up) continue;
-                    System.Net.NetworkInformation.IPv4InterfaceStatistics st = ni.GetIPv4Statistics();
-                    rx += st.BytesReceived;
-                    tx += st.BytesSent;
-                }
-            }
-            catch { return 0; }
-
-            DateTime now = DateTime.UtcNow;
-            double rate = 0;
-            if (_lastTime != DateTime.MinValue)
-            {
-                double sec = (now - _lastTime).TotalSeconds;
-                if (sec > 0.2)
-                    rate = ((rx - _lastRx) + (tx - _lastTx)) / 1024.0 / sec;
-            }
-            _lastRx = rx; _lastTx = tx; _lastTime = now;
-            return rate < 0 ? 0 : rate;
+            // 核心实现未包含在开源部分。
+            // 完整逻辑见发行版 BtBeam.exe；此处保留签名以说明架构与协议约定。
+            throw new NotImplementedException("core implementation not included in the open-source part");
         }
 
         /// 采样 600ms 判断是否繁忙
         public static bool IsBusy(double thresholdKBps)
         {
-            RateKBps();          // 建立基线
-            Thread.Sleep(600);
-            double r = RateKBps();
-            Sys.Diag("traffic: " + ((int)r) + " KB/s (threshold " + ((int)thresholdKBps) + ")");
-            return r > thresholdKBps;
+            // 核心实现未包含在开源部分。
+            // 完整逻辑见发行版 BtBeam.exe；此处保留签名以说明架构与协议约定。
+            throw new NotImplementedException("core implementation not included in the open-source part");
         }
     }
 
@@ -1348,118 +920,57 @@ namespace BtBeam
     {
         static string Run(string exe, string args, int timeoutMs)
         {
-            try
-            {
-                System.Diagnostics.ProcessStartInfo psi = new System.Diagnostics.ProcessStartInfo();
-                psi.FileName = exe;
-                psi.Arguments = args;
-                psi.UseShellExecute = false;
-                psi.RedirectStandardOutput = true;
-                psi.RedirectStandardError = true;
-                psi.CreateNoWindow = true;
-                using (System.Diagnostics.Process p = System.Diagnostics.Process.Start(psi))
-                {
-                    string o = p.StandardOutput.ReadToEnd();
-                    p.WaitForExit(timeoutMs);
-                    return o;
-                }
-            }
-            catch (Exception ex) { return "ERR: " + ex.Message; }
+            // 核心实现未包含在开源部分。
+            // 完整逻辑见发行版 BtBeam.exe；此处保留签名以说明架构与协议约定。
+            throw new NotImplementedException("core implementation not included in the open-source part");
         }
 
         /// 目前能认出的热点网段地址（Windows 移动热点固定 192.168.137.x）
         /// 客户端在热点网段拿到的地址（排除本机作为 AP 的 192.168.137.1）
         public static string GetHotspotIp()
         {
-            try
-            {
-                foreach (System.Net.NetworkInformation.NetworkInterface ni
-                         in System.Net.NetworkInformation.NetworkInterface.GetAllNetworkInterfaces())
-                {
-                    if (ni.OperationalStatus != System.Net.NetworkInformation.OperationalStatus.Up) continue;
-                    // 只认无线口，避免虚拟网卡干扰
-                    if (ni.NetworkInterfaceType != System.Net.NetworkInformation.NetworkInterfaceType.Wireless80211) continue;
-
-                    foreach (System.Net.NetworkInformation.UnicastIPAddressInformation ua
-                             in ni.GetIPProperties().UnicastAddresses)
-                    {
-                        if (ua.Address.AddressFamily != System.Net.Sockets.AddressFamily.InterNetwork) continue;
-                        string s = ua.Address.ToString();
-                        if (!s.StartsWith("192.168.137.")) continue;
-                        // 192.168.137.1 是本机当 AP 时的网关地址，不算客户端地址
-                        if (s == "192.168.137.1") continue;
-                        return s;
-                    }
-                }
-            }
-            catch { }
-            return null;
+            // 核心实现未包含在开源部分。
+            // 完整逻辑见发行版 BtBeam.exe；此处保留签名以说明架构与协议约定。
+            throw new NotImplementedException("core implementation not included in the open-source part");
         }
 
         /// 已关联热点但地址还没分配时的宽松探测（返回任意 192.168.137.x）
         public static bool HasHotspotLink()
         {
-            try
-            {
-                foreach (System.Net.NetworkInformation.NetworkInterface ni
-                         in System.Net.NetworkInformation.NetworkInterface.GetAllNetworkInterfaces())
-                {
-                    if (ni.OperationalStatus != System.Net.NetworkInformation.OperationalStatus.Up) continue;
-                    foreach (System.Net.NetworkInformation.UnicastIPAddressInformation ua
-                             in ni.GetIPProperties().UnicastAddresses)
-                    {
-                        if (ua.Address.AddressFamily != System.Net.Sockets.AddressFamily.InterNetwork) continue;
-                        if (ua.Address.ToString().StartsWith("192.168.137.")) return true;
-                    }
-                }
-            }
-            catch { }
-            return false;
+            // 核心实现未包含在开源部分。
+            // 完整逻辑见发行版 BtBeam.exe；此处保留签名以说明架构与协议约定。
+            throw new NotImplementedException("core implementation not included in the open-source part");
         }
 
         /// 当前关联的 Wi-Fi SSID（未连接返回 null）
         public static string CurrentSsid()
         {
-            try
-            {
-                string o = Run("netsh", "wlan show interfaces", 5000);
-                foreach (string raw in o.Split('\n'))
-                {
-                    string s = raw.Trim();
-                    if (s.StartsWith("SSID") && !s.StartsWith("BSSID"))
-                    {
-                        int c = s.IndexOf(':');
-                        if (c > 0) return s.Substring(c + 1).Trim();
-                    }
-                }
-            }
-            catch { }
-            return null;
+            // 核心实现未包含在开源部分。
+            // 完整逻辑见发行版 BtBeam.exe；此处保留签名以说明架构与协议约定。
+            throw new NotImplementedException("core implementation not included in the open-source part");
         }
 
         public static void Reconnect(string ssid)
         {
-            if (string.IsNullOrEmpty(ssid)) return;
-            try { Run("netsh", "wlan connect name=\"" + ssid + "\"", 8000); } catch { }
+            // 核心实现未包含在开源部分。
+            // 完整逻辑见发行版 BtBeam.exe；此处保留签名以说明架构与协议约定。
+            throw new NotImplementedException("core implementation not included in the open-source part");
         }
 
         /// 用户级 WLAN 配置是否已存在
         static bool ProfileExists(string ssid)
         {
-            try
-            {
-                string o = Run("netsh", "wlan show profiles", 5000);
-                return o.IndexOf(": " + ssid, StringComparison.OrdinalIgnoreCase) >= 0
-                    || o.IndexOf(ssid, StringComparison.OrdinalIgnoreCase) >= 0;
-            }
-            catch { return false; }
+            // 核心实现未包含在开源部分。
+            // 完整逻辑见发行版 BtBeam.exe；此处保留签名以说明架构与协议约定。
+            throw new NotImplementedException("core implementation not included in the open-source part");
         }
 
         /// 当前接口是否已关联到该 SSID
         static bool AlreadyOn(string ssid)
         {
-            string cur = CurrentSsid();
-            return cur != null && cur.Equals(ssid, StringComparison.OrdinalIgnoreCase);
+            // 核心实现未包含在开源部分。
+            // 完整逻辑见发行版 BtBeam.exe；此处保留签名以说明架构与协议约定。
+            throw new NotImplementedException("core implementation not included in the open-source part");
         }
 
         /// 连接热点。优化点：
@@ -1469,77 +980,9 @@ namespace BtBeam
         ///  4. 100ms 轮询等地址，拿到立刻返回
         public static bool Connect(string ssid, string pass, int timeoutSec, Action<string> log)
         {
-            // --- 已经连着目标网络：立刻返回 ---
-            if (AlreadyOn(ssid))
-            {
-                log("已连接 " + ssid + "，无需重连");
-                return GetHotspotIp() != null;
-            }
-
-            // --- profile 只在缺失时创建 ---
-            if (!ProfileExists(ssid))
-            {
-                string xml =
-                    "<?xml version=\"1.0\"?>\r\n" +
-                    "<WLANProfile xmlns=\"http://www.microsoft.com/networking/WLAN/profile/v1\">\r\n" +
-                    "  <name>" + ssid + "</name>\r\n" +
-                    "  <SSIDConfig><SSID><name>" + ssid + "</name></SSID></SSIDConfig>\r\n" +
-                    "  <connectionType>ESS</connectionType>\r\n" +
-                    "  <connectionMode>manual</connectionMode>\r\n" +
-                    "  <MSM><security>\r\n" +
-                    "    <authEncryption><authentication>WPA2PSK</authentication><encryption>AES</encryption><useOneX>false</useOneX></authEncryption>\r\n" +
-                    "    <sharedKey><keyType>passPhrase</keyType><protected>false</protected><keyMaterial>" + pass + "</keyMaterial></sharedKey>\r\n" +
-                    "  </security></MSM>\r\n" +
-                    "</WLANProfile>\r\n";
-
-                string tmp = Path.Combine(Path.GetTempPath(), "btbeam-wfd.xml");
-                try { File.WriteAllText(tmp, xml, new UTF8Encoding(false)); }
-                catch (Exception ex) { log("写 profile 失败: " + ex.Message); return false; }
-
-                Run("netsh", "wlan add profile filename=\"" + tmp + "\" user=current", 8000);
-                Sys.Diag("wifi: profile created for " + ssid);
-            }
-            else
-            {
-                Sys.Diag("wifi: profile reused for " + ssid);
-            }
-
-            // --- 只在当前连着别的网络时才断开 ---
-            string cur = CurrentSsid();
-            if (cur != null && !cur.Equals(ssid, StringComparison.OrdinalIgnoreCase))
-            {
-                log("断开 " + cur + " ...");
-                Run("netsh", "wlan disconnect", 5000);
-                Thread.Sleep(200);        // 原来固定 1500ms，缩短到 200ms
-            }
-
-            log("连接 " + ssid + " ...");
-            DateTime t0 = DateTime.UtcNow;
-            Run("netsh", "wlan connect name=\"" + ssid + "\"", 8000);
-            Sys.Diag("wifi: connect issued, waiting for address");
-
-            // --- 100ms 轮询，拿到地址立刻返回 ---
-            DateTime end = DateTime.Now.AddSeconds(timeoutSec);
-            while (DateTime.Now < end)
-            {
-                // 用户点了"停止"就立刻放弃等待（Wi-Fi 已断开，由 SendFiles 的 finally 负责恢复）
-                if (Link.ShouldCancel != null && Link.ShouldCancel())
-                {
-                    Sys.Diag("wifi: connect cancelled by user");
-                    return false;
-                }
-                string ip = GetHotspotIp();
-                if (ip != null)
-                {
-                    double ms = (DateTime.UtcNow - t0).TotalMilliseconds;
-                    Sys.Diag("wifi: got " + ip + " in " + ((int)ms) + "ms");
-                    log("已获得热点地址 " + ip + "（" + ((int)ms) + " ms）");
-                    return true;
-                }
-                Thread.Sleep(100);
-            }
-            Sys.Diag("wifi: timeout after " + timeoutSec + "s");
-            return false;
+            // 核心实现未包含在开源部分。
+            // 完整逻辑见发行版 BtBeam.exe；此处保留签名以说明架构与协议约定。
+            throw new NotImplementedException("core implementation not included in the open-source part");
         }
     }
 
@@ -1568,146 +1011,31 @@ namespace BtBeam
         public static void Serve(int port, string outDir, bool[] running,
                                  Action<string> log, Action<string> onFile, Action<long, long> progress)
         {
-            System.Net.Sockets.TcpListener srv =
-                new System.Net.Sockets.TcpListener(System.Net.IPAddress.Any, port);
-            try
-            {
-                srv.Start();
-            }
-            catch (Exception ex)
-            {
-                log("热点通道监听失败: " + ex.Message);
-                throw;
-            }
-
-            log("热点通道已监听 :" + port);
-            try
-            {
-                while (running[0])
-                {
-                    if (!srv.Pending()) { Thread.Sleep(150); continue; }
-                    System.Net.Sockets.TcpClient cli = srv.AcceptTcpClient();
-                    log("热点通道：对方已连入 " + cli.Client.RemoteEndPoint);
-                    try { ReceiveOne(cli, outDir, log, onFile, progress); }
-                    catch (Exception ex) { log("热点接收失败: " + ex.Message); }
-                    finally { try { cli.Close(); } catch { } }
-                }
-            }
-            finally { try { srv.Stop(); } catch { } }
+            // 核心实现未包含在开源部分。
+            // 完整逻辑见发行版 BtBeam.exe；此处保留签名以说明架构与协议约定。
+            throw new NotImplementedException("core implementation not included in the open-source part");
         }
 
         static string ReadLine(System.IO.Stream s)
         {
-            StringBuilder sb = new StringBuilder();
-            while (sb.Length < 4096)
-            {
-                int b = s.ReadByte();
-                if (b < 0) break;
-                if (b == '\n') break;
-                sb.Append((char)b);
-            }
-            return sb.ToString();
+            // 核心实现未包含在开源部分。
+            // 完整逻辑见发行版 BtBeam.exe；此处保留签名以说明架构与协议约定。
+            throw new NotImplementedException("core implementation not included in the open-source part");
         }
 
         static void ReceiveOne(System.Net.Sockets.TcpClient cli, string outDir,
                                Action<string> log, Action<string> onFile, Action<long, long> progress)
         {
-            System.IO.Stream ns = cli.GetStream();
-            string header = ReadLine(ns);
-            if (string.IsNullOrEmpty(header)) { log("热点通道：空请求"); return; }
-
-            // 兼容两种前缀：BtBeam 原生 LBBT1，早期脚本用 WFDM1
-            string json = null;
-            if (header.StartsWith("LBBT1 ")) json = header.Substring(6);
-            else if (header.StartsWith("WFDM1 ")) json = header.Substring(6);
-            else { log("协议不符（需要 LBBT1 或 WFDM1）: " + header.Substring(0, Math.Min(40, header.Length))); return; }
-            int n1 = json.IndexOf("\"name\":\"");
-            int n2 = json.IndexOf("\",\"size\":", n1);
-            if (n1 < 0 || n2 < 0) { log("头部解析失败"); return; }
-
-            string fname = json.Substring(n1 + 8, n2 - (n1 + 8));
-            fname = fname.Replace("\\\\", "\\").Replace("\\\"", "\"");
-            fname = Path.GetFileName(fname);
-            long size = long.Parse(json.Substring(n2 + 9).TrimEnd('}'));
-
-            if (!Directory.Exists(outDir)) Directory.CreateDirectory(outDir);
-            string dest = Path.Combine(outDir, fname);
-            int i = 1;
-            while (File.Exists(dest))
-            {
-                dest = Path.Combine(outDir,
-                    Path.GetFileNameWithoutExtension(fname) + " (" + i + ")" + Path.GetExtension(fname));
-                i++;
-            }
-
-            byte[] ack = Encoding.UTF8.GetBytes("OK\n");
-            ns.Write(ack, 0, ack.Length);
-            ns.Flush();
-
-            long got = 0;
-            byte[] buf = new byte[262144];
-            string tmp = dest + ".part";
-            using (FileStream fs = new FileStream(tmp, FileMode.Create))
-            {
-                while (got < size)
-                {
-                    int want = (int)Math.Min((long)buf.Length, size - got);
-                    int n = ns.Read(buf, 0, want);
-                    if (n <= 0) break;
-                    fs.Write(buf, 0, n);
-                    got += n;
-                    if (progress != null) progress(got, size);
-                }
-            }
-
-            if (got == size)
-            {
-                File.Move(tmp, dest);
-                byte[] done = Encoding.UTF8.GetBytes("DONE " + Path.GetFileName(dest) + "\n");
-                ns.Write(done, 0, done.Length);
-                ns.Flush();
-                log("热点收到 " + Path.GetFileName(dest));
-                if (onFile != null) onFile(dest);
-            }
-            else
-            {
-                try { File.Delete(tmp); } catch { }
-                log("热点接收不完整 " + got + "/" + size);
-            }
+            // 核心实现未包含在开源部分。
+            // 完整逻辑见发行版 BtBeam.exe；此处保留签名以说明架构与协议约定。
+            throw new NotImplementedException("core implementation not included in the open-source part");
         }
 
         public static void Send(string host, int port, string path, Action<long, long> progress)
         {
-            FileInfo fi = new FileInfo(path);
-            using (System.Net.Sockets.TcpClient cli = new System.Net.Sockets.TcpClient())
-            {
-                cli.Connect(host, port);
-                System.IO.Stream ns = cli.GetStream();
-
-                string safe = fi.Name.Replace("\\", "_").Replace("\"", "'");
-                string header = HS + "{\"name\":\"" + safe + "\",\"size\":" + fi.Length + "}\n";
-                byte[] hb = Encoding.UTF8.GetBytes(header);
-                ns.Write(hb, 0, hb.Length);
-                ns.Flush();
-
-                string ack = ReadLine(ns);
-                if (ack.Trim() != "OK") throw new Exception("对端拒绝: " + ack);
-
-                long sent = 0;
-                byte[] buf = new byte[262144];
-                using (FileStream fs = File.OpenRead(path))
-                {
-                    int n;
-                    while ((n = fs.Read(buf, 0, buf.Length)) > 0)
-                    {
-                        ns.Write(buf, 0, n);
-                        sent += n;
-                        if (progress != null) progress(sent, fi.Length);
-                    }
-                }
-                ns.Flush();
-                try { ReadLine(ns); } catch { }
-            }
+            // 核心实现未包含在开源部分。
+            // 完整逻辑见发行版 BtBeam.exe；此处保留签名以说明架构与协议约定。
+            throw new NotImplementedException("core implementation not included in the open-source part");
         }
     }
 

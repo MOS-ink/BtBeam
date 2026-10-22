@@ -1,6 +1,11 @@
-# BtBeam
+﻿# BtBeam
 
 两台 Windows 电脑，靠近就能互传文件 —— **不需要同一个网络，不需要账号，不经第三方服务器**。
+
+> **半开源项目**：本仓库公开 UI 层、配置、设备枚举与全部协议的**方法签名和注释**；
+> 蓝牙握手、热点协商、流量判断、传输协议等核心实现**不包含在源码中**（方法体为
+> `NotImplementedException`）。完整功能请使用 [发行版](https://mosink.top/workshop/)。
+> **授权：仅限个人非商业使用**，详见 [LICENSE.md](LICENSE.md)。
 
 ```
    蓝牙（RFCOMM）          热点（TCP 53321）
@@ -105,6 +110,9 @@ powershell -ExecutionPolicy Bypass -File build.ps1 -NoSign      # 不签名
 
 产物：`BtBeam.exe`（约 105 KB，单文件，零运行时依赖）
 
+> 注：编译需要完整实现文件 `BtBeam.cs.full`（不在本仓库中）。
+> 本仓库的 `BtBeam.cs` 是半开源删减版，只能通过语法检查，无法产出可运行的程序。
+
 图标由 `make_icon.py` 生成 `.ico`，但**运行时图标是代码画的**（`DrawGlyph`），因为托盘图标需要多尺寸，`Icon` 从文件加载只能拿到一个尺寸。
 
 ```powershell
@@ -169,6 +177,32 @@ RESEARCH.md          开发过程中的技术验证记录
 
 ---
 
+## 开源范围
+
+| 部分 | 是否开源 | 说明 |
+|---|---|---|
+| UI 层（`PopupForm` / `ToastForm` / `FloatingBall` / 托盘） | **是** | 完整实现 |
+| 配置读写 `Cfg`、蓝牙枚举 `BtEnum`、`WdtDevice` | **是** | 完整实现 |
+| Win32 / Winsock P/Invoke 声明 `Wsa`、`Net` | **是** | 完整实现 |
+| `Link` 蓝牙 RFCOMM（握手 / 角色协商 / 命令通道 / 文件收发） | **仅签名** | 方法体未包含 |
+| `Hotspot` 移动热点封装 | **仅签名** | 方法体未包含 |
+| `Wifi` Wi-Fi 连接与地址获取 | **仅签名** | 方法体未包含 |
+| `Traffic` 实时流量采样 | **仅签名** | 方法体未包含 |
+| `Hotlink` 热点通道 TCP 传输（LBBT1） | **仅签名** | 方法体未包含 |
+
+协议常量、注释、调用关系全部保留 —— 想自己实现的话，签名和语义都是完整的。
+
 ## License
 
-MIT
+**PolyForm Noncommercial License 1.0.0** —— 允许个人学习、研究、业余项目使用，
+**禁止任何商业用途**。
+
+完整条款见 [LICENSE.md](LICENSE.md)（中文摘要附在文末，以英文原文为准）。
+
+简单说：
+
+- ✅ 自己用、改、学习、fork 研究
+- ✅ 教育机构、慈善组织、政府机构使用
+- ❌ 卖钱、商业产品集成、收费服务、企业内部营利部署
+
+Copyright (c) 2026 MOS-ink (墨溟)
