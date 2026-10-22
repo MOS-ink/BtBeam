@@ -2,7 +2,7 @@
 //  BtBeam —— 半开源版本
 //
 //  开源部分：
-//    · UI 层（PopupForm / ToastForm / FloatingBall / 托盘图标与菜单）
+//    · UI 层（PopupForm / ToastForm / FloatingBall / 托盘图标与菜单 / 关于窗口）
 //    · 配置读写、蓝牙设备枚举、Win32 P/Invoke 声明
 //    · 蓝牙协议与热点传输的 方法签名 / 常量 / 全部注释
 //
@@ -14,7 +14,7 @@
 //    Hotlink   热点通道 TCP 传输（LBBT1 协议）
 //
 //  完整功能请使用发行版： https://mosink.top/workshop/
-//  授权：仅限个人非商业使用，详见 LICENSE
+//  授权：PolyForm Noncommercial 1.0.0 —— 仅限个人非商业使用，禁止倒卖与商业集成
 // ============================================================================
 
 // BtBeam.cs — 蓝牙点对点文件传输（托盘常驻版）
@@ -44,8 +44,8 @@ using Microsoft.Win32;
 [assembly: AssemblyTitle("BtBeam")]
 [assembly: AssemblyDescription("蓝牙点对点文件传输")]
 [assembly: AssemblyProduct("BtBeam")]
-[assembly: AssemblyCompany("BtBeam")]
-[assembly: AssemblyCopyright("")]
+[assembly: AssemblyCompany("mosink.top")]
+[assembly: AssemblyCopyright("Copyright (c) 2026 MOS-ink · mosink.top · PolyForm Noncommercial 1.0.0")]
 [assembly: AssemblyVersion("1.0.0.0")]
 [assembly: AssemblyFileVersion("1.0.0.0")]
 
@@ -1919,7 +1919,19 @@ namespace BtBeam
             modeLine.SetBounds(Ui.Px(k, 2), Ui.Px(k, y + 4), Ui.Px(k, 324), Ui.Px(k, 18));
             body.Controls.Add(modeLine);
 
-            y += 24;
+            y += 22;
+
+            // 来源标识：改不掉的那种 —— 倒手转卖的人最烦这一行
+            Label srcLine = new Label();
+            srcLine.Text = "mosink.top/workshop   ·   免费下载 · 禁止商用";
+            srcLine.ForeColor = Pal.Sub;
+            srcLine.Font = new Font("Consolas", 7.5f);
+            srcLine.SetBounds(Ui.Px(k, 2), Ui.Px(k, y), Ui.Px(k, 324), Ui.Px(k, 15));
+            srcLine.Cursor = Cursors.Hand;
+            srcLine.Click += delegate { try { Sys.OpenPath("https://mosink.top/workshop/"); } catch { } };
+            body.Controls.Add(srcLine);
+
+            y += 20;
 
             if (app.HotspotOn)
             {
@@ -2206,7 +2218,7 @@ namespace BtBeam
         {
             try
             {
-                Tray.NOTIFYICONDATA d = Tray.Build(msgWin.Handle, 1, trayIcon.Handle, "BtBeam 蓝牙直传");
+                Tray.NOTIFYICONDATA d = Tray.Build(msgWin.Handle, 1, trayIcon.Handle, "BtBeam 蓝牙直传 · mosink.top");
                 bool ok = Tray.Shell_NotifyIcon(Tray.NIM_ADD, ref d);
                 int err = Marshal.GetLastWin32Error();
                 trayAdded = ok;
@@ -2224,7 +2236,7 @@ namespace BtBeam
             if (trayAdded) return;   // 已成功注册就别碰它：DELETE 之后再 ADD 一旦失败，图标就真的没了
             try
             {
-                Tray.NOTIFYICONDATA d = Tray.Build(msgWin.Handle, 1, trayIcon.Handle, "BtBeam 蓝牙直传");
+                Tray.NOTIFYICONDATA d = Tray.Build(msgWin.Handle, 1, trayIcon.Handle, "BtBeam 蓝牙直传 · mosink.top");
                 bool ok = Tray.Shell_NotifyIcon(Tray.NIM_ADD, ref d);
                 int e2 = Marshal.GetLastWin32Error();
                 trayAdded = ok;
@@ -2303,6 +2315,8 @@ namespace BtBeam
             m.Items.Add(new ToolStripSeparator());
             m.Items.Add("接收目录…", null, delegate { PickOutDir(); });
             m.Items.Add("打开接收目录", null, delegate { Sys.OpenPath(cfg.OutDir); });
+            m.Items.Add(new ToolStripSeparator());
+            m.Items.Add("关于 BtBeam", null, delegate { ShowAbout(); });
             m.Items.Add(new ToolStripSeparator());
 
             ToolStripMenuItem auto = new ToolStripMenuItem("开机自启");
@@ -2413,6 +2427,43 @@ namespace BtBeam
                 }
                 catch (Exception ex) { Sys.Diag("startup hotspot check failed: " + ex.Message); }
             });
+        }
+
+        /// 关于窗口：版本、来源、许可。倒手转卖的人改得掉标题，改不干净这里。
+        void ShowAbout()
+        {
+            string ver = "1.0";
+            try
+            {
+                System.Reflection.Assembly asm = System.Reflection.Assembly.GetExecutingAssembly();
+                System.Version v = asm.GetName().Version;
+                if (v != null) ver = v.Major + "." + v.Minor + "." + v.Build;
+            }
+            catch { }
+
+            string msg =
+                "BtBeam  " + ver + "\n\n" +
+                "两台 Windows 电脑直连传文件\n" +
+                "不需要同一个网络，不需要账号，不经第三方服务器。\n\n" +
+                "官网      https://mosink.top/workshop/\n" +
+                "源码      https://github.com/MOS-ink/BtBeam\n" +
+                "许可      PolyForm Noncommercial 1.0.0\n" +
+                "          仅限个人非商业使用，禁止倒卖与商业集成\n\n" +
+                "Copyright (c) 2026 MOS-ink (墨溟)";
+
+            try
+            {
+                DialogResult r = MessageBox.Show(this.popup, msg, "关于 BtBeam",
+                    MessageBoxButtons.OKCancel, MessageBoxIcon.Information);
+                if (r == DialogResult.OK)
+                {
+                    try { Sys.OpenPath("https://mosink.top/workshop/"); } catch { }
+                }
+            }
+            catch
+            {
+                MessageBox.Show(msg, "关于 BtBeam", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
         }
 
         void RestartListening()
