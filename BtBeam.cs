@@ -763,8 +763,16 @@ namespace BtBeam
         {
             List<int> list = new List<int>();
             if (preferred >= 4 && preferred <= 30) list.Add(preferred);
+
+            // 默认通道紧跟其后。
+            // PreparePeer 只试 MaxChannels(=4) 个通道，把 20 排第 2 位，
+            // 两端 ini 不一致（一边 4 一边 20）时也能在前两次尝试里命中；
+            // 否则老配置只盲扫 4/5/6/7，够不着 20，直接报"联系不上对端"。
+            const int DefaultChannel = 20;
+            if (preferred != DefaultChannel) list.Add(DefaultChannel);
+
             for (int i = 4; i <= 30; i++)
-                if (i != preferred) list.Add(i);
+                if (i != preferred && i != DefaultChannel) list.Add(i);
             return list.ToArray();
         }
 
