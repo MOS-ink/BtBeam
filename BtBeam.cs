@@ -3,7 +3,7 @@
 //
 //  开源部分：
 //    · UI 层（PopupForm / ToastForm / FloatingBall / 托盘图标与菜单 / 关于窗口）
-//    · 配置读写、蓝牙设备枚举、Win32 P/Invoke 声明
+//    · 配置读写、蓝牙设备枚举、文件名清洗、Win32 P/Invoke 声明
 //    · 蓝牙协议与热点传输的 方法签名 / 常量 / 全部注释
 //
 //  未包含实现（方法体为 throw NotImplementedException）：
@@ -311,6 +311,38 @@ namespace BtBeam
             string fb = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads");
             if (Directory.Exists(fb)) return fb;
             return Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+        }
+
+        /// 把对端送来的文件名收拾成能落盘的：去路径、换非法字符、截长度。
+        /// 顺带兜住极端情况的空名与纯点名（"." ".."）。
+        public static string SafeFileName(string name)
+        {
+            if (string.IsNullOrEmpty(name)) return "unnamed";
+            try
+            {
+                string only = Path.GetFileName(name);
+                if (!string.IsNullOrEmpty(only)) name = only;
+            }
+            catch { }
+
+            char[] bad = Path.GetInvalidFileNameChars();
+            StringBuilder sb = new StringBuilder(name.Length);
+            for (int i = 0; i < name.Length; i++)
+            {
+                char c = name[i];
+                sb.Append(Array.IndexOf(bad, c) >= 0 ? '_' : c);
+            }
+
+            string r = sb.ToString().Trim();
+            r = r.TrimEnd('.');
+            if (r.Length == 0) r = "unnamed";
+            if (r.Length > 180)
+            {
+                string ext = Path.GetExtension(r);
+                if (ext.Length > 16) ext = "";
+                r = r.Substring(0, 180 - ext.Length) + ext;
+            }
+            return r;
         }
 
         public static string ExeDir()
