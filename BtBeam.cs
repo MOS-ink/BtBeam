@@ -1080,6 +1080,7 @@ namespace BtBeam
         public int Channel = 20;
         public bool AutoStart = false;
         public bool ShowAll = false;
+        public bool HotspotAlways = false;   // 启动即开热点，让对端随时能连
         public string LastMac = "";
 
         static string PathFile()
@@ -1109,6 +1110,7 @@ namespace BtBeam
                     else if (k == "channel") { int x; if (int.TryParse(v, out x) && x >= 1 && x <= 30) c.Channel = x; }
                     else if (k == "autostart") c.AutoStart = v == "1";
                     else if (k == "showall") c.ShowAll = v == "1";
+                    else if (k == "hotspotalways") c.HotspotAlways = v == "1";
                     else if (k == "lastmac") c.LastMac = v;
                 }
             }
@@ -1125,6 +1127,7 @@ namespace BtBeam
                     "channel=" + Channel + "\r\n" +
                     "autostart=" + (AutoStart ? "1" : "0") + "\r\n" +
                     "showall=" + (ShowAll ? "1" : "0") + "\r\n" +
+                    "hotspotalways=" + (HotspotAlways ? "1" : "0") + "\r\n" +
                     "lastmac=" + LastMac + "\r\n");
             }
             catch { }
@@ -2455,6 +2458,15 @@ namespace BtBeam
                         StartHotspotListener();
                         Sys.Diag("startup: hotspot listener started on :" + HotspotPort
                                  + " (hotspotOn=" + HotspotOn + ")");
+                    }
+
+                    // 开机就开热点：接收端常驻待命，对端发 PREPARE 时能秒回 READY，
+                    // 不必再等它自己开热点（那一步在部分机器上要卡 60 秒）。
+                    if (cfg.HotspotAlways && !on)
+                    {
+                        Sys.Diag("startup: hotspotalways=1, starting hotspot");
+                        try { StartHotspot(); }
+                        catch (Exception hex) { Sys.Diag("startup auto-hotspot failed: " + hex.Message); }
                     }
                 }
                 catch (Exception ex) { Sys.Diag("startup hotspot check failed: " + ex.Message); }
