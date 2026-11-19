@@ -2456,6 +2456,9 @@ namespace BtBeam
                     {
                         HotspotOn = true;
                         try { HotspotSsid = Hotspot.Ssid; } catch { }
+                        try { hostIpCache = Hotspot.HostIp(); } catch { }
+                        if (string.IsNullOrEmpty(hostIpCache)) hostIpCache = "192.168.137.1";
+                        Sys.Diag("startup: adopted running hotspot, ip=" + hostIpCache);
                     }
 
                     // 热点接收通道必须无条件监听：
@@ -2930,6 +2933,9 @@ namespace BtBeam
 
         // ---------------- 热点通道 ----------------
         public volatile bool HotspotOn = false;
+        // 热点本机地址缓存。开热点成功后填上，EnsureHotspot 的快速路径直接用它，
+        // 避免为了拿一个固定是 192.168.137.1 的值去跑 netsh。（见 EnsureHotspot）
+        internal string hostIpCache = null;
 
         /// 用户点了"停止"，传输线程看到就中断
         public volatile bool CancelRequested = false;
@@ -3005,6 +3011,21 @@ namespace BtBeam
 
         public string EnsureHotspot()
         {
+            // ---- 快速路径 ----
+            // 热点已经确认开着时，直接用缓存值返回，完全不碰 WinRT 与 netsh。
+            // 原因：IsStaOnPeerHotspot / Hotspot.IsOn / Hotspot.Ssid 都会走
+            // netsh 子进程或 WinRT，而 Serve 是单线程 —— 一旦卡住，
+            // 对端发来的 PREPARE 就永远等不到回复，只能干等 60 秒后降级蓝牙。
+            if (HotspotOn && !string.IsNullOrEmpty(hostIpCache))
+            {
+                Sys.Diag("EnsureHotspot: fast path, cached=" + hostIpCache);
+                return HotspotSsid + "," + HotspotPass + "," + hostIpCache;
+            }
+
+            Sys.Diag("EnsureHotspot: slow path start (hotspotOn=" + HotspotOn
+                     + " cache=" + (hostIpCache == null ? "(null)" : hostIpCache) + ")");
+            DateTime _t0 = DateTime.UtcNow;
+
             // 致命冲突守卫：如果我此刻是别人热点的客户端（192.168.137.x 非 .1），
             // 就绝不能开自己的热点 —— 两者网段完全相同（都是 192.168.137.1/24），
             // 开了之后本机路由会把 192.168.137.1 指向自己的 AP，再也到不了对方。
@@ -3043,7 +3064,16 @@ namespace BtBeam
                 StartHotspotListener();
                 Sys.Diag("hotspot auto-started by peer request");
             }
-            return HotspotSsid + "," + HotspotPass + "," + Hotspot.HostIp();
+
+            if (string.IsNullOrEmpty(hostIpCache))
+            {
+                try { hostIpCache = Hotspot.HostIp(); } catch { }
+            }
+            if (string.IsNullOrEmpty(hostIpCache)) hostIpCache = "192.168.137.1";
+
+            Sys.Diag("EnsureHotspot: done in " + (int)(DateTime.UtcNow - _t0).TotalMilliseconds
+                     + "ms, ip=" + hostIpCache);
+            return HotspotSsid + "," + HotspotPass + "," + hostIpCache;
         }
 
         public void StartHotspot()
@@ -3071,7 +3101,9 @@ namespace BtBeam
                     hsThread.Start();
 
                     HotspotOn = true;
-                    Sys.Diag("hotspot started: " + HotspotSsid + " ip=" + Hotspot.HostIp());
+                    try { hostIpCache = Hotspot.HostIp(); } catch { }
+                    if (string.IsNullOrEmpty(hostIpCache)) hostIpCache = "192.168.137.1";
+                    Sys.Diag("hotspot started: " + HotspotSsid + " ip=" + hostIpCache);
                     popup.SetStatus("热点已开 " + HotspotSsid + " / " + HotspotPass + "  @" + Hotspot.HostIp());
                     popup.Rebuild();
                 }

@@ -30,7 +30,6 @@ sftp = c.open_sftp()
 sftp.put(EXE, "/tmp/p.exe")
 sftp.put(TP, "/tmp/p.json")
 sftp.close()
-
 sudo("install -m 644 -o root -g root /tmp/p.exe /var/www/personal/workshop/files/BtBeam.exe")
 sudo("install -m 644 -o root -g root /tmp/p.json /var/www/personal/workshop/tools.json")
 print("remote:", sudo("sha256sum /var/www/personal/workshop/files/BtBeam.exe"))
