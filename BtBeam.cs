@@ -2877,10 +2877,26 @@ namespace BtBeam
                         bool joined = false;
                         try
                         {
-                            joined = Wifi.Connect(ssid, pass, 45,
+                            joined = Wifi.Connect(ssid, pass, 25,
                                 delegate (string s) { popup.SetStatus(s); });
                         }
                         catch (Exception ex) { Sys.Diag("join failed: " + ex.Message); }
+
+                        // 第一次失败往往是因为网卡刚从原网络脱离、关联被丢弃。
+                        // 此时旧连接已断，立刻重试一次成功率明显更高。
+                        if (!joined && !(Link.ShouldCancel != null && Link.ShouldCancel()))
+                        {
+                            Sys.Diag("wifi: first attempt failed, retrying once");
+                            popup.SetStatus("接入未成功，重试一次 ...");
+                            try
+                            {
+                                Thread.Sleep(800);
+                                joined = Wifi.Connect(ssid, pass, 20,
+                                    delegate (string s) { popup.SetStatus(s); });
+                                Sys.Diag("wifi: retry result=" + joined);
+                            }
+                            catch (Exception ex) { Sys.Diag("join retry failed: " + ex.Message); }
+                        }
 
                         if (joined)
                         {
