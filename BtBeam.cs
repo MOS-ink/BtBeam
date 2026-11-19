@@ -782,6 +782,11 @@ namespace BtBeam
         /// 让对端按需开热点，返回 "ssid,pass,ip"；失败返回 null
         public static Func<string> HotspotStarter;
 
+        /// 只读查询本机热点凭据（"ssid,pass,ip"，没开则返回 null）。
+        /// 与 HotspotStarter 的区别：它绝不触发开热点，只是告诉对端"我这儿有"，
+        /// 让对端直接连过来，省掉它自己开热点那一大段耗时。
+        public static Func<string> HotspotInfoProvider;
+
         /// 反向托管时，对端连上我方热点后回报的地址
         public static string LastPeerIp = null;
 
@@ -939,6 +944,9 @@ namespace BtBeam
     {
         static long _lastRx, _lastTx;
         static DateTime _lastTime = DateTime.MinValue;
+        // 采样状态是进程级共享的：主线程与 Serve 线程同时调会互相覆盖，
+        // 差值算出来永远是 0 或负数。整段采样串行化。
+        static readonly object _rateLock = new object();
 
         public static double RateKBps()
         {
@@ -2187,6 +2195,17 @@ namespace BtBeam
                      + ",\"ip\":\"" + Hotspot.HostIp() + "\"}";
             };
 
+            // 只读上报本机热点凭据：让对端直接连，不用它自己开热点
+            Link.HotspotInfoProvider = delegate
+            {
+                try
+                {
+                    if (!HotspotOn || string.IsNullOrEmpty(hostIpCache)) return null;
+                    return HotspotSsid + "," + HotspotPass + "," + hostIpCache;
+                }
+                catch { return null; }
+            };
+
             // 对端通过蓝牙遥控：按需开热点并回报凭据
             Link.HotspotStarter = delegate
             {
@@ -2673,11 +2692,18 @@ namespace BtBeam
                     return;
                 }
 
+                string peerHotspot = null;      // 对端已经开好的热点（"ssid,pass,ip"）
                 if (tr.StartsWith("RATE "))
                 {
+                    string rest = tr.Substring(5).Trim();
+                    int hp = rest.IndexOf(" HOTSPOT ", StringComparison.Ordinal);
+                    string numPart = hp >= 0 ? rest.Substring(0, hp) : rest;
+                    if (hp >= 0) peerHotspot = rest.Substring(hp + 9).Trim();
+
                     double v = 0;
-                    if (double.TryParse(tr.Substring(5).Trim(), out v)) { peerRate = v; peerRateKnown = true; }
-                    Sys.Diag("traffic reply ok: peer=" + ((int)peerRate) + " KB/s");
+                    if (double.TryParse(numPart.Trim(), out v)) { peerRate = v; peerRateKnown = true; }
+                    Sys.Diag("traffic reply ok: peer=" + ((int)peerRate) + " KB/s"
+                             + (peerHotspot == null ? "" : "  hotspot=" + peerHotspot));
                 }
                 else
                 {
@@ -2735,6 +2761,13 @@ namespace BtBeam
                 {
                     iShouldHost = false;
                     Sys.Diag("role: forced STA (I am already a client on peer hotspot)");
+                }
+                else if (!string.IsNullOrEmpty(peerHotspot))
+                {
+                    // 对端热点已经在跑 —— 直接连它，绝不自己再开一个。
+                    // 这一段是"卡在准备热点"的正解：不再走 Hotspot.Start。
+                    iShouldHost = false;
+                    Sys.Diag("role: forced STA (peer hotspot already up: " + peerHotspot + ")");
                 }
                 else
                 {
@@ -2808,8 +2841,14 @@ namespace BtBeam
                     Sys.Diag("peer is busier or equal, let peer host");
                 }
 
-                // ---- 第一步：遥控对端开热点 ----
+                // ---- 第一步：拿到对端热点凭据 ----
                 string ready = readyFromHosting;      // HOSTING 里已经拿到就不必再问
+                if (!string.IsNullOrEmpty(peerHotspot))
+                {
+                    // TRAFFIC 一轮就带回来了，省掉 PreparePeer 的往返与等待
+                    ready = "READY " + peerHotspot;
+                    Sys.Diag("skip PREPARE, reuse hotspot from TRAFFIC: " + peerHotspot);
+                }
                 if (string.IsNullOrEmpty(ready))
                 {
                     popup.SetStatus("正在请求 " + target.Name + " 准备高速通道 ...");
